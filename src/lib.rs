@@ -136,3 +136,23 @@ impl Drop for Vad {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn set_sample_rate() {
+        let mut vad = Vad::new();
+        assert_eq!(vad.set_sample_rate(8000), Ok(()));
+        assert_eq!(vad.set_sample_rate(8001), Err(()));
+    }
+
+    #[test]
+    fn voice_activity() {
+        let vad = Vad::new();
+
+        let buffer = std::iter::repeat(0).take(160).collect::<Vec<i16>>();
+        assert_eq!(vad.is_voice_segment(buffer.as_slice()), Ok(false));
+    }
+}
