@@ -6,14 +6,14 @@ mod bindgen;
 use bindgen::*;
 
 pub enum VadMode {
-    Quality,
-    LowBitrate,
-    Aggressive,
-    VeryAggressive,
+    Quality = 0,
+    LowBitrate = 1,
+    Aggressive = 2,
+    VeryAggressive = 3,
 }
 
 pub struct Vad {
-    fvad: *mut Fvad
+    fvad: *mut Fvad,
 }
 
 impl Vad {
@@ -23,18 +23,43 @@ impl Vad {
     /// eventually be deleted using fvad_free().
     ///
     /// Panics in case of a memory allocation error.
-    /// 
-    /// Returns Err(()) if an invalid sample rate was specified.
-    pub fn new(sample_rate: i32) -> Result<Vad, ()> {
+    ///
+    /// Defaults to 8KHz sample rate and `Quality` mode.
+    pub fn new() -> Self {
         unsafe {
             let fvad: *mut Fvad = fvad_new();
-            if fvad == std::ptr::null_mut() { panic!("fvad_new() did not return a valid instance (memory allocation error)"); }
+            if fvad == std::ptr::null_mut() {
+                panic!("fvad_new() did not return a valid instance (memory allocation error)");
+            }
+            Self { fvad }
+        }
+    }
+
+    /// Creates and initializes a VAD instance.
+    ///
+    /// On success, returns a pointer to the new VAD instance, which should
+    /// eventually be deleted using fvad_free().
+    ///
+    /// Panics in case of a memory allocation error.
+    ///
+    /// Defaults to `Quality` mode.
+    ///
+    /// Valid values for the sample rate are 8000, 16000, 32000 and 48000. The default is 8000. Note
+    /// that internally all processing will be done 8000 Hz; input data in higher
+    /// sample rates will just be downsampled first.
+    ///
+    /// Returns Err(()) if an invalid sample rate was specified.
+    pub fn new_with_rate(sample_rate: i32) -> Result<Self, ()> {
+        unsafe {
+            let fvad: *mut Fvad = fvad_new();
+            if fvad == std::ptr::null_mut() {
+                panic!("fvad_new() did not return a valid instance (memory allocation error)");
+            }
             let mut instance = Vad { fvad };
             instance.set_sample_rate(sample_rate)?;
             Ok(instance)
         }
     }
-    
 
     /// Reinitializes a VAD instance, clearing all state and resetting mode and
     /// sample rate to defaults.
@@ -43,7 +68,6 @@ impl Vad {
             fvad_reset(self.fvad);
         }
     }
-
 
     /// Sets the input sample rate in Hz for a VAD instance.
     ///
@@ -72,26 +96,17 @@ impl Vad {
     /// ("very aggressive"). The default mode is 0.
     ///
     /// Returns Ok(()) on success, or Err(()) if the specified mode is invalid.
-    pub fn fvad_set_mode(&mut self, mode: VadMode) -> Result<(), ()> {
-        let imode;
-
-        match mode {
-            VadMode::Quality => imode = 0,
-            VadMode::LowBitrate => imode = 1,
-            VadMode::Aggressive => imode = 2,
-            VadMode::VeryAggressive => imode = 3,
-        }
+    pub fn set_mode(&mut self, mode: VadMode) -> Result<(), ()> {
+        let imode = mode as i32;
 
         unsafe {
             match fvad_set_mode(self.fvad, imode) {
                 0 => Ok(()),
-                _ => Err(())
+                _ => Err(()),
             }
         }
     }
 
-
-    
     /// Calculates a VAD decision for an audio frame.
     ///
     /// `frame` is an array of `length` signed 16-bit samples. Only frames with a
@@ -101,14 +116,14 @@ impl Vad {
     /// Returns              : Ok(true) - (active voice),
     ///                       Ok(false) - (non-active Voice),
     ///                       Err(()) - (invalid frame length).
-    pub fn is_voice_segment(&mut self, buffers: &[i16]) -> Result<bool, ()>  {
-        let buffer = &buffers[0] as *const i16;
+    pub fn is_voice_segment(&mut self, buffer: &[i16]) -> Result<bool, ()> {
+        let b = &buffer[0] as *const i16;
 
         unsafe {
-            match fvad_process(self.fvad, buffer, buffers.len()) {
+            match fvad_process(self.fvad, b, buffer.len()) {
                 1 => Ok(true),
                 0 => Ok(false),
-                _ => Err(())
+                _ => Err(()),
             }
         }
     }
@@ -119,5 +134,31 @@ impl Drop for Vad {
         unsafe {
             fvad_free(self.fvad);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn set_sample_rate() {
+        let mut vad = Vad::new();
+        assert_eq!(vad.set_sample_rate(8000), Ok(()));
+        assert_eq!(vad.set_sample_rate(8001), Err(()));
+    }
+
+    #[test]
+    fn is_voice_segment() {
+        let vad = Vad::new();
+
+        let buffer = std::iter::repeat(0).take(160).collect::<Vec<i16>>();
+        assert_eq!(vad.is_voice_segment(buffer.as_slice()), Ok(false));
+    }
+
+    #[test]
+    fn set_mode() {
+        let mut vad = Vad::new();
+        assert_eq!(vad.set_mode(VadMode::Quality), Ok(()));
     }
 }
