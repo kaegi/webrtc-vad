@@ -36,12 +36,12 @@ impl Vad {
     }
     
 
-    /// 
     /// Reinitializes a VAD instance, clearing all state and resetting mode and
     /// sample rate to defaults.
-    /// 
-    pub unsafe fn reset(&mut self) {
-        fvad_reset(self.fvad);
+    pub fn reset(&mut self) {
+        unsafe {
+            fvad_reset(self.fvad);
+        }
     }
 
 
@@ -51,11 +51,13 @@ impl Vad {
     /// that internally all processing will be done 8000 Hz; input data in higher
     /// sample rates will just be downsampled first.
     ///
-    /// Returns 
-    pub unsafe fn set_sample_rate(&mut self, sample_rate: i32) -> Result<(), ()> {
-        match fvad_set_sample_rate(self.fvad, sample_rate) {
-            0 => Ok(()),
-            _ => Err(()),
+    /// Returns `Err(())` if sample rate is not valid.
+    pub fn set_sample_rate(&mut self, sample_rate: i32) -> Result<(), ()> {
+        unsafe {
+            match fvad_set_sample_rate(self.fvad, sample_rate) {
+                0 => Ok(()),
+                _ => Err(()),
+            }
         }
     }
 
@@ -75,9 +77,9 @@ impl Vad {
 
         match mode {
             VadMode::Quality => imode = 0,
-            VadMode::LowBitrate => imode = 0,
-            VadMode::Aggressive => imode = 0,
-            VadMode::VeryAggressive => imode = 0,
+            VadMode::LowBitrate => imode = 1,
+            VadMode::Aggressive => imode = 2,
+            VadMode::VeryAggressive => imode = 3,
         }
 
         unsafe {
