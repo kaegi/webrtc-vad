@@ -6,10 +6,10 @@ mod bindgen;
 use bindgen::*;
 
 pub enum VadMode {
-    Quality,
-    LowBitrate,
-    Aggressive,
-    VeryAggressive,
+    Quality = 0,
+    LowBitrate = 1,
+    Aggressive = 2,
+    VeryAggressive = 3,
 }
 
 pub struct Vad {
@@ -88,15 +88,8 @@ impl Vad {
     /// ("very aggressive"). The default mode is 0.
     ///
     /// Returns Ok(()) on success, or Err(()) if the specified mode is invalid.
-    pub fn fvad_set_mode(&mut self, mode: VadMode) -> Result<(), ()> {
-        let imode;
-
-        match mode {
-            VadMode::Quality => imode = 0,
-            VadMode::LowBitrate => imode = 1,
-            VadMode::Aggressive => imode = 2,
-            VadMode::VeryAggressive => imode = 3,
-        }
+    pub fn set_mode(&mut self, mode: VadMode) -> Result<(), ()> {
+        let imode = mode as i32;
 
         unsafe {
             match fvad_set_mode(self.fvad, imode) {
@@ -148,10 +141,16 @@ mod test {
     }
 
     #[test]
-    fn voice_activity() {
+    fn is_voice_segment() {
         let vad = Vad::new();
 
         let buffer = std::iter::repeat(0).take(160).collect::<Vec<i16>>();
         assert_eq!(vad.is_voice_segment(buffer.as_slice()), Ok(false));
+    }
+
+    #[test]
+    fn set_mode() {
+        let mut vad = Vad::new();
+        assert_eq!(vad.set_mode(VadMode::Quality), Ok(()));
     }
 }
