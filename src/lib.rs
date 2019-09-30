@@ -150,7 +150,7 @@ mod test {
 
     #[test]
     fn is_voice_segment() {
-        let vad = Vad::new();
+        let mut vad = Vad::new();
 
         let buffer = std::iter::repeat(0).take(160).collect::<Vec<i16>>();
         assert_eq!(vad.is_voice_segment(buffer.as_slice()), Ok(false));
