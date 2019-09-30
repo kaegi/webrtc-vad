@@ -116,7 +116,7 @@ impl Vad {
     /// Returns              : Ok(true) - (active voice),
     ///                       Ok(false) - (non-active Voice),
     ///                       Err(()) - (invalid frame length).
-    pub fn is_voice_segment(&mut self, buffers: &[i16]) -> Result<bool, ()> {
+    pub fn is_voice_segment(&self, buffers: &[i16]) -> Result<bool, ()> {
         let buffer = &buffers[0] as *const i16;
 
         unsafe {
