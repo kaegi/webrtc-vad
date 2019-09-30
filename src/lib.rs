@@ -13,7 +13,7 @@ pub enum VadMode {
 }
 
 pub struct Vad {
-    fvad: *mut Fvad
+    fvad: *mut Fvad,
 }
 
 impl Vad {
@@ -23,27 +23,44 @@ impl Vad {
     /// eventually be deleted using fvad_free().
     ///
     /// Panics in case of a memory allocation error.
-    /// 
-    /// Returns Err(()) if an invalid sample rate was specified.
-    pub fn new(sample_rate: i32) -> Result<Vad, ()> {
+    pub fn new() -> Self {
         unsafe {
             let fvad: *mut Fvad = fvad_new();
-            if fvad == std::ptr::null_mut() { panic!("fvad_new() did not return a valid instance (memory allocation error)"); }
+            if fvad == std::ptr::null_mut() {
+                panic!("fvad_new() did not return a valid instance (memory allocation error)");
+            }
+            Self { fvad }
+        }
+    }
+
+    /// Creates and initializes a VAD instance.
+    ///
+    /// On success, returns a pointer to the new VAD instance, which should
+    /// eventually be deleted using fvad_free().
+    ///
+    /// Panics in case of a memory allocation error.
+    ///
+    /// Returns Err(()) if an invalid sample rate was specified.
+    pub fn new_with_rate(sample_rate: i32) -> Result<Self, ()> {
+        unsafe {
+            let fvad: *mut Fvad = fvad_new();
+            if fvad == std::ptr::null_mut() {
+                panic!("fvad_new() did not return a valid instance (memory allocation error)");
+            }
             let mut instance = Vad { fvad };
             instance.set_sample_rate(sample_rate)?;
             Ok(instance)
         }
     }
-    
 
-    /// 
+    ///
     /// Reinitializes a VAD instance, clearing all state and resetting mode and
     /// sample rate to defaults.
-    /// 
-    pub unsafe fn reset(&mut self) {
-        fvad_reset(self.fvad);
+    pub fn reset(&mut self) {
+        unsafe {
+            fvad_reset(self.fvad);
+        }
     }
-
 
     /// Sets the input sample rate in Hz for a VAD instance.
     ///
@@ -51,11 +68,13 @@ impl Vad {
     /// that internally all processing will be done 8000 Hz; input data in higher
     /// sample rates will just be downsampled first.
     ///
-    /// Returns 
-    pub unsafe fn set_sample_rate(&mut self, sample_rate: i32) -> Result<(), ()> {
-        match fvad_set_sample_rate(self.fvad, sample_rate) {
-            0 => Ok(()),
-            _ => Err(()),
+    /// Returns
+    pub fn set_sample_rate(&mut self, sample_rate: i32) -> Result<(), ()> {
+        unsafe {
+            match fvad_set_sample_rate(self.fvad, sample_rate) {
+                0 => Ok(()),
+                _ => Err(()),
+            }
         }
     }
 
@@ -83,13 +102,11 @@ impl Vad {
         unsafe {
             match fvad_set_mode(self.fvad, imode) {
                 0 => Ok(()),
-                _ => Err(())
+                _ => Err(()),
             }
         }
     }
 
-
-    
     /// Calculates a VAD decision for an audio frame.
     ///
     /// `frame` is an array of `length` signed 16-bit samples. Only frames with a
@@ -99,14 +116,14 @@ impl Vad {
     /// Returns              : Ok(true) - (active voice),
     ///                       Ok(false) - (non-active Voice),
     ///                       Err(()) - (invalid frame length).
-    pub fn is_voice_segment(&mut self, buffers: &[i16]) -> Result<bool, ()>  {
+    pub fn is_voice_segment(&mut self, buffers: &[i16]) -> Result<bool, ()> {
         let buffer = &buffers[0] as *const i16;
 
         unsafe {
             match fvad_process(self.fvad, buffer, buffers.len()) {
                 1 => Ok(true),
                 0 => Ok(false),
-                _ => Err(())
+                _ => Err(()),
             }
         }
     }
