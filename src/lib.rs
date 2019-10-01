@@ -4,12 +4,34 @@
 #![allow(dead_code)]
 mod bindgen;
 use bindgen::*;
+use std::convert::TryFrom;
 
 pub enum VadMode {
     Quality = 0,
     LowBitrate = 1,
     Aggressive = 2,
     VeryAggressive = 3,
+}
+
+#[derive(Debug)]
+pub enum SampleRate {
+    Rate8kHz = 8000,
+    Rate16kHz = 16000,
+    Rate32kHz = 32000,
+    Rate48kHz = 48000,
+}
+
+impl TryFrom<i32> for SampleRate {
+    type Error = &'static str;
+    fn try_from(item: i32) -> Result<Self, Self::Error> {
+        match item {
+            8000 => Ok(SampleRate::Rate8kHz),
+            16000 => Ok(SampleRate::Rate16kHz),
+            32000 => Ok(SampleRate::Rate32kHz),
+            48000 => Ok(SampleRate::Rate48kHz),
+            _ => Err("Invalid sample rate"),
+        }
+    }
 }
 
 pub struct Vad {
@@ -26,13 +48,7 @@ impl Vad {
     ///
     /// Defaults to 8KHz sample rate and `Quality` mode.
     pub fn new() -> Self {
-        unsafe {
-            let fvad: *mut Fvad = fvad_new();
-            if fvad == std::ptr::null_mut() {
-                panic!("fvad_new() did not return a valid instance (memory allocation error)");
-            }
-            Self { fvad }
-        }
+        Self::new_with_rate_and_mode(SampleRate::Rate8kHz, VadMode::Quality)
     }
 
     /// Creates and initializes a VAD instance.
@@ -47,17 +63,42 @@ impl Vad {
     /// Valid values for the sample rate are 8000, 16000, 32000 and 48000. The default is 8000. Note
     /// that internally all processing will be done 8000 Hz; input data in higher
     /// sample rates will just be downsampled first.
+    pub fn new_with_rate(sample_rate: SampleRate) -> Self {
+        Self::new_with_rate_and_mode(sample_rate, VadMode::Quality)
+    }
+
+    /// Creates and initializes a VAD instance.
     ///
-    /// Returns Err(()) if an invalid sample rate was specified.
-    pub fn new_with_rate(sample_rate: i32) -> Result<Self, ()> {
+    /// On success, returns a pointer to the new VAD instance, which should
+    /// eventually be deleted using fvad_free().
+    ///
+    /// Panics in case of a memory allocation error.
+    ///
+    /// Defaults to `8000` sample rate.
+    pub fn new_with_mode(mode: VadMode) -> Self {
+        Self::new_with_rate_and_mode(SampleRate::Rate8kHz, mode)
+    }
+
+    /// Creates and initializes a VAD instance.
+    ///
+    /// On success, returns a pointer to the new VAD instance, which should
+    /// eventually be deleted using fvad_free().
+    ///
+    /// Panics in case of a memory allocation error.
+    ///
+    /// Valid values for the sample rate are 8000, 16000, 32000 and 48000. The default is 8000. Note
+    /// that internally all processing will be done 8000 Hz; input data in higher
+    /// sample rates will just be downsampled first.
+    pub fn new_with_rate_and_mode(sample_rate: SampleRate, mode: VadMode) -> Self {
         unsafe {
-            let fvad: *mut Fvad = fvad_new();
-            if fvad == std::ptr::null_mut() {
+            let fvad = fvad_new();
+            if fvad.is_null() {
                 panic!("fvad_new() did not return a valid instance (memory allocation error)");
             }
             let mut instance = Vad { fvad };
-            instance.set_sample_rate(sample_rate)?;
-            Ok(instance)
+            instance.set_sample_rate(sample_rate);
+            instance.set_mode(mode);
+            instance
         }
     }
 
@@ -74,14 +115,10 @@ impl Vad {
     /// Valid values are 8000, 16000, 32000 and 48000. The default is 8000. Note
     /// that internally all processing will be done 8000 Hz; input data in higher
     /// sample rates will just be downsampled first.
-    ///
-    /// Returns `Err(())` if sample rate is not valid.
-    pub fn set_sample_rate(&mut self, sample_rate: i32) -> Result<(), ()> {
+    pub fn set_sample_rate(&mut self, sample_rate: SampleRate) {
+        let sample_rate = sample_rate as i32;
         unsafe {
-            match fvad_set_sample_rate(self.fvad, sample_rate) {
-                0 => Ok(()),
-                _ => Err(()),
-            }
+            assert_eq!(fvad_set_sample_rate(self.fvad, sample_rate), 0);
         }
     }
 
@@ -94,17 +131,10 @@ impl Vad {
     ///
     /// Valid modes are 0 ("quality"), 1 ("low bitrate"), 2 ("aggressive"), and 3
     /// ("very aggressive"). The default mode is 0.
-    ///
-    /// Returns Ok(()) on success, or Err(()) if the specified mode is invalid.
-    pub fn set_mode(&mut self, mode: VadMode) -> Result<(), ()> {
-        let imode = mode as i32;
+    pub fn set_mode(&mut self, mode: VadMode) {
+        let mode = mode as i32;
 
-        unsafe {
-            match fvad_set_mode(self.fvad, imode) {
-                0 => Ok(()),
-                _ => Err(()),
-            }
-        }
+        unsafe { assert_eq!(fvad_set_mode(self.fvad, mode), 0) }
     }
 
     /// Calculates a VAD decision for an audio frame.
@@ -137,6 +167,12 @@ impl Drop for Vad {
     }
 }
 
+impl Default for Vad {
+    fn default() -> Self {
+        Vad::new()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -144,8 +180,11 @@ mod test {
     #[test]
     fn set_sample_rate() {
         let mut vad = Vad::new();
-        assert_eq!(vad.set_sample_rate(8000), Ok(()));
-        assert_eq!(vad.set_sample_rate(8001), Err(()));
+        assert_eq!(
+            vad.set_sample_rate(SampleRate::try_from(8000i32).unwrap()),
+            ()
+        );
+        assert_eq!(vad.set_sample_rate(SampleRate::Rate8kHz), ());
     }
 
     #[test]
@@ -159,6 +198,6 @@ mod test {
     #[test]
     fn set_mode() {
         let mut vad = Vad::new();
-        assert_eq!(vad.set_mode(VadMode::Quality), Ok(()));
+        assert_eq!(vad.set_mode(VadMode::Quality), ());
     }
 }
