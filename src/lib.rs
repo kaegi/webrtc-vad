@@ -41,54 +41,34 @@ pub struct Vad {
 impl Vad {
     /// Creates and initializes a VAD instance.
     ///
-    /// On success, returns a pointer to the new VAD instance, which should
-    /// eventually be deleted using fvad_free().
-    ///
     /// Panics in case of a memory allocation error.
     ///
-    /// Defaults to 8KHz sample rate and `Quality` mode.
+    /// Defaults to `8kHz` sample rate and `Quality` mode.
     pub fn new() -> Self {
         Self::new_with_rate_and_mode(SampleRate::Rate8kHz, VadMode::Quality)
     }
 
     /// Creates and initializes a VAD instance.
     ///
-    /// On success, returns a pointer to the new VAD instance, which should
-    /// eventually be deleted using fvad_free().
-    ///
     /// Panics in case of a memory allocation error.
     ///
     /// Defaults to `Quality` mode.
-    ///
-    /// Valid values for the sample rate are 8000, 16000, 32000 and 48000. The default is 8000. Note
-    /// that internally all processing will be done 8000 Hz; input data in higher
-    /// sample rates will just be downsampled first.
     pub fn new_with_rate(sample_rate: SampleRate) -> Self {
         Self::new_with_rate_and_mode(sample_rate, VadMode::Quality)
     }
 
     /// Creates and initializes a VAD instance.
     ///
-    /// On success, returns a pointer to the new VAD instance, which should
-    /// eventually be deleted using fvad_free().
-    ///
     /// Panics in case of a memory allocation error.
     ///
-    /// Defaults to `8000` sample rate.
+    /// Defaults to `8kHz` sample rate.
     pub fn new_with_mode(mode: VadMode) -> Self {
         Self::new_with_rate_and_mode(SampleRate::Rate8kHz, mode)
     }
 
     /// Creates and initializes a VAD instance.
     ///
-    /// On success, returns a pointer to the new VAD instance, which should
-    /// eventually be deleted using fvad_free().
-    ///
     /// Panics in case of a memory allocation error.
-    ///
-    /// Valid values for the sample rate are 8000, 16000, 32000 and 48000. The default is 8000. Note
-    /// that internally all processing will be done 8000 Hz; input data in higher
-    /// sample rates will just be downsampled first.
     pub fn new_with_rate_and_mode(sample_rate: SampleRate, mode: VadMode) -> Self {
         unsafe {
             let fvad = fvad_new();
@@ -112,7 +92,7 @@ impl Vad {
 
     /// Sets the input sample rate in Hz for a VAD instance.
     ///
-    /// Valid values are 8000, 16000, 32000 and 48000. The default is 8000. Note
+    /// Note:
     /// that internally all processing will be done 8000 Hz; input data in higher
     /// sample rates will just be downsampled first.
     pub fn set_sample_rate(&mut self, sample_rate: SampleRate) {
@@ -128,9 +108,6 @@ impl Vad {
     /// Put in other words the probability of being speech when the VAD returns 1 is
     /// increased with increasing mode. As a consequence also the missed detection
     /// rate goes up.
-    ///
-    /// Valid modes are 0 ("quality"), 1 ("low bitrate"), 2 ("aggressive"), and 3
-    /// ("very aggressive"). The default mode is 0.
     pub fn set_mode(&mut self, mode: VadMode) {
         let mode = mode as i32;
 
@@ -139,8 +116,8 @@ impl Vad {
 
     /// Calculates a VAD decision for an audio frame.
     ///
-    /// `frame` is an array of `length` signed 16-bit samples. Only frames with a
-    /// length of 10, 20 or 30 ms are supported, so for example at 8 kHz, `length`
+    /// `buffer` is a slice of signed 16-bit samples. Only slices with a
+    /// length of 10, 20 or 30 ms are supported, so for example at 8 kHz, `buffer.len()`
     /// must be either 80, 160 or 240.
     ///
     /// Returns              : Ok(true) - (active voice),
